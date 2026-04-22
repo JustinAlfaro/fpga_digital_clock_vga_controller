@@ -1,0 +1,29 @@
+# Vivado build artifacts
+vivado.jou
+vivado.log
+*.jou
+*.log
+*.str
+
+# Vivado generated directories
+.Xil/
+Project_1/.Xil/
+Project_1/Project_1.cache/
+Project_1/Project_1.gen/
+Project_1/Project_1.ip_user_files/
+Project_1/Project_1.runs/
+Project_1/Project_1.sim/
+# Project_1/Project_1.hw/ — kept: contains XDC constraints (.lpr)
+Project_1/Project_1.srcs/utils_1/
+
+# Bitstream and checkpoint files
+*.bit
+*.dcp
+*.mcs
+*.prm
+
+# Temporary / OS files
+*.bak
+*~
+.DS_Store
+Thumbs.db
