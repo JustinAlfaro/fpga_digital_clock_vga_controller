@@ -5,4 +5,5 @@ tb_debounce,PASS,0,0
 tb_div_freq,PASS,0,0
 tb_fsm_adjust_mode,PASS,0,0
 tb_hour_converter,PASS,0,0
+tb_integration,PASS,0,0
 tb_vga_controller,PASS,0,0

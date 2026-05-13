@@ -50,7 +50,7 @@ Implementación de un reloj digital en FPGA con salida VGA, desarrollado sobre l
 |---|---|---|---|
 | `CLK100MHZ` | E3 | LVCMOS33 | Reloj del sistema, 100 MHz |
 | `CPU_RESETN` | C12 | LVCMOS33 | Reset general (activo bajo) |
-| `BTNC` | N17 | LVCMOS33 | Ciclar modo: RUN → ADJ\_HOUR → ADJ\_MIN → RUN |
+| `BTNC` | N17 | LVCMOS33 | Ciclar modo: RUN - ADJ\_HOUR - ADJ\_MIN - RUN |
 | `BTNU` | M18 | LVCMOS33 | Incrementar campo seleccionado |
 | `BTND` | P18 | LVCMOS33 | Decrementar campo seleccionado |
 | `BTNR` | M17 | LVCMOS33 | Aceptar ajuste y regresar a RUN |
@@ -104,8 +104,8 @@ fpga_digital_clock_vga_controller/
 │   │   │   ├── sync_signal.v                  # Sincronizador 2 etapas
 │   │   │   ├── fsm_adjust_mode.v              # FSM de ajuste
 │   │   │   ├── bcd_counter.v                  # Contador BCD paramétrico
-│   │   │   ├── binary_bcd_decoder.v           # Binario → BCD (Double Dabble)
-│   │   │   ├── hour_converter.v               # Conversión 24h → 12h
+│   │   │   ├── binary_bcd_decoder.v           # Binario a BCD (Double Dabble)
+│   │   │   ├── hour_converter.v               # Conversión 24h a 12h
 │   │   │   ├── mux2.v                         # Multiplexor 2:1 genérico
 │   │   │   ├── vga_controller.v               # Controlador VGA 640×480
 │   │   │   ├── text_render.v                  # Renderizador de texto
@@ -115,7 +115,7 @@ fpga_digital_clock_vga_controller/
 │   │   │   ├── bg_image.mem                   # Datos de la imagen de fondo
 │   │   │   ├── pixel_mux.v                    # Mux de salida VGA
 │   │   │   ├── bg_generator.v                 # Fondo algorítmico (no instanciado)
-│   │   │   ├── bcd_ascii_decoder.v            # BCD → ASCII (no instanciado)
+│   │   │   ├── bcd_ascii_decoder.v            # BCD a ASCII (no instanciado)
 │   │   │   └── rom_bitmap.v                   # ROM de bitmaps (no instanciado)
 │   │   └── sim_1/new/
 │   │       ├── tb_bcd_counter.v
@@ -129,15 +129,18 @@ fpga_digital_clock_vga_controller/
 │   └── Project_1.hw/
 │       └── Project_1.lpr
 ├── scripts/
-│   ├── run_sim.sh                             # Ejecuta simulaciones
-│   ├── run_pipeline.sh                        # Pipeline completo
-│   ├── parse_sim_logs.sh                      # Parsea logs → CSV
-│   └── parse_utilization.sh                   # Parsea utilización → CSV
+│   ├── run_sim.sh                             # Ejecuta simulaciones con Icarus Verilog
+│   ├── run_pipeline.sh                        # Pipeline completo (sim + síntesis + recursos)
+│   ├── parse_sim_logs.sh                      # Parsea logs a CSV
+│   ├── parse_utilization.sh                   # Síntesis, implementación y extracción de recursos/latencia
+│   └── run_synth_impl.tcl                     # TCL batch para Vivado (síntesis + implementación)
 ├── sim_results/
 │   └── resultados.csv                         # Resultados de testbenches
 ├── synth_results/
-│   └── utilizacion.csv                        # Utilización de recursos
-├── DOCUMENTACION.md                           # Documentación técnica autogenerada
+│   ├── utilizacion.csv                        # Utilización de recursos post-síntesis
+│   └── latencia.csv                           # Métricas de timing post-implementación
+├── diagram.png
+├── Nota sobre el uso de IA.md
 ├── README.md
 └── .gitignore
 ```
@@ -154,8 +157,8 @@ fpga_digital_clock_vga_controller/
 | `sync_signal` | `sync_signal.v` | Sincronizador 2-etapas para entradas asíncronas |
 | `fsm_adjust_mode` | `fsm_adjust_mode.v` | FSM de ajuste: RUN / ADJ\_HOUR / ADJ\_MIN |
 | `bcd_counter` | `bcd_counter.v` | Contador BCD paramétrico (con carry) |
-| `binary_bcd_decoder` | `binary_bcd_decoder.v` | Double Dabble: binario → BCD 2 dígitos |
-| `hour_converter` | `hour_converter.v` | Conversión 24 h → 12 h BCD + flag AM/PM |
+| `binary_bcd_decoder` | `binary_bcd_decoder.v` | Double Dabble: binario a BCD 2 dígitos |
+| `hour_converter` | `hour_converter.v` | Conversión 24 h a 12 h BCD + flag AM/PM |
 | `mux2` | `mux2.v` | Multiplexor 2:1 genérico parametrizable |
 | `vga_controller` | `vga_controller.v` | Generador de señales VGA 640×480@60 Hz |
 | `text_renderer` | `text_render.v` | Renderizador combinacional de caracteres |
@@ -171,6 +174,7 @@ fpga_digital_clock_vga_controller/
 | Parámetro | Horizontal | Vertical |
 |---|---|---|
 | Área visible | 640 px | 480 líneas |
+
 Pixel clock: 25 MHz (generado como enable de 1 de cada 4 ciclos del reloj de 100 MHz).
 
 ---
@@ -189,6 +193,7 @@ Todos los testbenches pasaron sin errores:
 | `tb_hour_converter` | PASS | 0 | 0 |
 | `tb_vga_controller` | PASS | 0 | 0 |
 | `tb_integration` | PASS | 0 | 0 |
+
 ---
 
 ## Utilización de recursos (post-síntesis)
@@ -201,5 +206,70 @@ Todos los testbenches pasaron sin errores:
 | DSPs | 1 | 240 | 0.42% |
 
 La BRAM se lleva casi todo porque la VRAM almacena 307 200 píxeles × 12 bits ≈ 3.52 Mbit de los 4.86 Mbit disponibles, más lo que usa `bg_rom` para la imagen de fondo.
+
+---
+
+## Temporización post-implementación
+
+| Métrica | Valor | Unidad |
+|---|---|---|
+| Reloj | 100.000 | MHz |
+| Período | 10.000 | ns |
+| WNS | +0.212 | ns |
+| Retardo camino crítico | 9.020 | ns |
+| Latencia efectiva (período − WNS) | 9.788 | ns |
+
+Todas las restricciones de timing se cumplen (WNS > 0). El camino crítico va del registro `bram_addr_r` (DSP48E1) al banco de BRAM (`RAMB36E1`), con un retardo de 9.020 ns (44 % lógica, 56 % ruteo).
+
+---
+
+## Cómo reproducir el proyecto
+
+### Requisitos
+
+| Herramienta | Versión | Uso |
+|---|---|---|
+| Vivado | 2024.1 | Síntesis, implementación y programación |
+| Icarus Verilog | ≥ 11 | Simulación funcional |
+| Nexys A7-100T | — | Plataforma de hardware |
+
+> Vivado debe estar instalado en `/tools/Xilinx/Vivado/2024.1/` (ruta que usa el pipeline). Si está en otra ruta, editar la variable `VIVADO` en `scripts/parse_utilization.sh`.
+
+### 1. Clonar el repositorio
+
+```bash
+git clone <url-del-repositorio>
+cd fpga_digital_clock_vga_controller
+chmod +x scripts/*.sh
+```
+
+### 2. Ejecutar el pipeline completo
+
+```bash
+./scripts/run_pipeline.sh
+```
+
+Esto realiza en orden:
+
+1. Simula los 8 testbenches con Icarus Verilog, genera `sim_results/resultados.csv`
+2. Lanza síntesis e implementación en Vivado (≈ 5–10 min) y genera:
+   - `synth_results/utilizacion.csv` — utilización de recursos
+   - `synth_results/latencia.csv` — métricas de timing
+
+Para re-parsear sin re-sintetizar (cuando los reportes ya existen):
+
+```bash
+./scripts/run_pipeline.sh --skip-synth
+```
+
+### 3. Programar la FPGA
+
+1. Abrir el proyecto en Vivado:
+   ```bash
+   /tools/Xilinx/Vivado/2024.1/bin/vivado Project_1/Project_1.xpr
+   ```
+2. En el panel *Flow Navigator*, seleccionar **Generate Bitstream**.
+3. Una vez generado: **Open Hardware Manager**, conectar la Nexys A7-100T por USB y seleccionar **Program Device**.
+4. Conectar el monitor VGA. El reloj arranca en `00:00:00` y puede ajustarse con los botones.
 
 ---

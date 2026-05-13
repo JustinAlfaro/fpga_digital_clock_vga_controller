@@ -1,13 +1,19 @@
 #!/bin/bash
 # Script      : run_pipeline.sh
-# Descripcion : Script maestro que ejecuta el pipeline completo de pruebas:
+# Descripcion : Script maestro que ejecuta el pipeline completo:
 #               1. Simula todos los testbenches (run_sim.sh)
 #               2. Parsea los logs y genera el CSV de resultados (parse_sim_logs.sh)
-# Uso         : ./scripts/run_pipeline.sh  (desde la raiz del repositorio)
+#               3. Lanza síntesis+implementación y extrae recursos y latencia
+#                  (parse_utilization.sh)
+# Uso         : ./scripts/run_pipeline.sh [--skip-synth]
+#                 --skip-synth  Omite Vivado en el paso 3; usa reportes existentes.
+
+SKIP_SYNTH_FLAG=""
+[[ "$1" == "--skip-synth" ]] && SKIP_SYNTH_FLAG="--skip-synth"
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-SCRIPTS=("run_sim.sh" "parse_sim_logs.sh")
-NAMES=("Ejecutar simulaciones" "Parsear logs y generar CSV")
+SCRIPTS=("run_sim.sh" "parse_sim_logs.sh" "parse_utilization.sh")
+NAMES=("Ejecutar simulaciones" "Parsear logs y generar CSV" "Síntesis, recursos y latencia")
 
 for i in "${!SCRIPTS[@]}"; do
     script="$SCRIPT_DIR/${SCRIPTS[$i]}"
@@ -24,7 +30,9 @@ for i in "${!SCRIPTS[@]}"; do
         exit 1
     fi
 
-    bash "$script"
+    args=""
+    [[ "$script" == *parse_utilization.sh && -n "$SKIP_SYNTH_FLAG" ]] && args="$SKIP_SYNTH_FLAG"
+    bash "$script" $args
 
     if [[ $? -ne 0 ]]; then
         echo ""
@@ -36,5 +44,7 @@ done
 echo ""
 echo "========================================"
 echo "Pipeline completado."
-echo "Resultados en: sim_results/resultados.csv"
+echo "Resultados simulación : sim_results/resultados.csv"
+echo "Recursos FPGA         : synth_results/utilizacion.csv"
+echo "Latencia              : synth_results/latencia.csv"
 echo "========================================"
